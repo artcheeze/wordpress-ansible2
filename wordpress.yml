@@ -1,0 +1,80 @@
+---
+- name: Install WordPress
+  hosts: wordpress
+  remote_user: root
+
+  tasks:
+   - name: Yum install
+     yum:
+      name: "{{ item }}"
+      state: present
+     loop: ["httpd", "mariadb", "mariadb-server", "php", "php-common", "php-mysql", "php-gd", "php-xml", "php-mbstring", "php-mcrypt", "php-xmlrpc", "unzip", "wget", "MySQL-python"]
+   - name: systemctl
+     service:
+      name: "{{ item }}"
+      state: started
+      enabled: yes
+     loop: ["httpd", "mariadb"]
+   - name: open firewall
+     firewalld:
+      service: http
+      permanent: yes
+      state: enabled
+      immediate: yes
+   - name: mysqladmin
+     block:
+      - command: mysqladmin password "abc"
+     rescue:
+      - debug: 
+         msg: "Maybe we already run this command!"
+   - name: Copy dump.sql to Destination!
+     copy: 
+      src: /home/centos/quiz/dump.sql
+      dest: /tmp/dump.sql
+      remote_src: no
+   - name: Dump sql phase!
+     block:
+      - mysql_db:
+         login_user: root
+         login_password: abc
+         state: import
+         name: all
+         target: /tmp/dump.sql
+     rescue:
+      - debug:
+         msg: "We already dump this sql kub p'jub"
+   - name: Download wordpress.zip 
+     get_url:
+      url: https://wordpress.org/wordpress-5.0.tar.gz
+      dest: /tmp/wordpress.tar.gz
+   - name: Extract wordpress.tar.gz
+     unarchive:
+      src: /tmp/wordpress.tar.gz
+      dest: /var/www/html/
+      remote_src: yes
+   - name: Change owner and Change mode 
+     file:
+      path: /var/www/html/wordpress
+      owner: apache
+      group: apache
+      mode: '0755'
+   - name: Make folder for wp-content
+     file:
+      path: /var/www/html/wordpress/wp-content/uploads
+      state: directory
+      group: apache
+   - name: copy wordpress config file
+     copy:
+      src: /var/www/html/wordpress/wp-config-sample.php
+      dest: /var/www/html/wordpress/wp-config.php
+      remote_src: yes
+   - name: replace config.php of wordpress
+     replace:
+      path: /var/www/html/wordpress/wp-config.php
+      regexp: "{{ item.word }}"
+      replace: "{{ item.replace }}"
+     loop:
+       - { word: database_name_here, replace: wordpress }
+       - { word: username_here, replace: ansible }
+       - { word: password_here, replace: mypassword }
+       - { word: localhost, replace: localhost }
